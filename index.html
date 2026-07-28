@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Rushings Studio</title>
+
+<style>
+
+body{
+    margin:0;
+    display:flex;
+    height:100vh;
+    overflow:hidden;
+}
+
+textarea{
+
+    width:40%;
+    background:#111;
+    color:white;
+    font-size:18px;
+    padding:20px;
+    font-family:monospace;
+    border:none;
+    outline:none;
+
+}
+
+
+canvas{
+
+    width:60%;
+    height:100%;
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<textarea id="code">
+
+</textarea>
+
+
+<canvas id="view"></canvas>
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+
+
+<script>
+
+
+function parseValue(value){
+
+    value=value.trim();
+
+
+    if(value.includes("(")){
+
+        return [
+            ...value.matchAll(/-?\d+\.?\d*/g)
+        ].map(x=>Number(x[0]));
+
+    }
+
+
+    if(value.toLowerCase()=="true")
+        return true;
+
+
+    if(value.toLowerCase()=="false")
+        return false;
+
+
+
+    let number=Number(value);
+
+
+    if(!isNaN(number))
+        return number;
+
+
+    return value.replaceAll('"',"");
+
+}
+
+
+
+
+function translate(code){
+
+
+    let scene={
+        entities:[]
+    };
+
+
+    let objects={};
+
+
+
+    for(let line of code.split("\n")){
+
+
+        line=line.trim();
+
+
+        if(!line)
+            continue;
+
+
+
+        let create=line.match(
+            /(\w+)\s*=\s*new\.(\w+)\(\)/
+        );
+
+
+
+        if(create){
+
+
+            let name=create[1];
+            let type=create[2];
+
+
+            let obj={
+
+                name:name,
+                type:type,
+                properties:{}
+
+            };
+
+
+            objects[name]=obj;
+
+
+            scene.entities.push(obj);
+
+
+            continue;
+
+        }
+
+
+
+
+        let property=line.match(
+            /(\w+)\.(\w+)\s*=\s*(.+)/
+        );
+
+
+
+        if(property){
+
+
+            let name=property[1];
+
+            let prop=property[2];
+
+            let value=property[3];
+
+
+
+            if(objects[name]){
+
+                objects[name].properties[prop]
+                =
+                parseValue(value);
+
+            }
+
+        }
+
+
+    }
+
+
+    return scene;
+
+}
+
+
+
+
+
+let scene =
+new THREE.Scene();
+
+
+
+let camera =
+new THREE.PerspectiveCamera(
+
+70,
+
+window.innerWidth /
+window.innerHeight,
+
+0.1,
+
+1000
+
+);
+
+
+
+
+let renderer =
+new THREE.WebGLRenderer({
+
+    canvas:
+    document.getElementById("view")
+
+});
+
+
+
+renderer.setSize(
+
+window.innerWidth * 0.6,
+
+window.innerHeight
+
+);
+
+
+
+
+function applyProperties(object,p){
+
+
+
+    if(p.Position){
+
+        object.position.set(
+
+            p.Position[0],
+            p.Position[1],
+            p.Position[2]
+
+        );
+
+    }
+
+
+
+
+    if(p.Rotation){
+
+        object.rotation.set(
+
+            p.Rotation[0] * Math.PI/180,
+            p.Rotation[1] * Math.PI/180,
+            p.Rotation[2] * Math.PI/180
+
+        );
+
+    }
+
+
+
+
+    if(p.Size){
+
+        object.scale.set(
+
+            p.Size[0],
+            p.Size[1],
+            p.Size[2]
+
+        );
+
+    }
+
+
+
+
+
+    if(p.Color && object.material){
+
+        object.material.color.set(
+            p.Color
+        );
+
+    }
+
+
+
+
+
+    if(
+        p.Transparency !== undefined
+        &&
+        object.material
+    ){
+
+        object.material.transparent=true;
+
+        object.material.opacity =
+        1 - p.Transparency;
+
+    }
+
+
+}
+
+
+
+
+
+
+
+function engine(data){
+
+
+
+    scene.clear();
+
+
+
+    scene.background =
+    new THREE.Color("black");
+
+
+
+    let target =
+    new THREE.Vector3();
+
+
+
+
+
+    for(let entity of data.entities){
+
+
+
+        let p =
+        entity.properties;
+
+
+
+
+
+        if(entity.type=="Sky"){
+
+
+            if(p.Color){
+
+                scene.background =
+                new THREE.Color(
+                    p.Color
+                );
+
+            }
+
+        }
+
+
+
+
+
+
+        if(entity.type=="Box"){
+
+
+
+            let mesh =
+            new THREE.Mesh(
+
+                new THREE.BoxGeometry(),
+
+                new THREE.MeshStandardMaterial()
+
+            );
+
+
+
+            applyProperties(
+                mesh,
+                p
+            );
+
+
+
+            scene.add(mesh);
+
+
+
+            if(p.Position){
+
+                target.set(
+
+                    p.Position[0],
+                    p.Position[1],
+                    p.Position[2]
+
+                );
+
+            }
+
+
+        }
+
+
+
+
+
+
+
+        if(entity.type=="Light"){
+
+
+
+            let light =
+            new THREE.PointLight(
+
+                p.Color || "white",
+
+                p.Intensity || 1
+
+            );
+
+
+
+            if(p.Position){
+
+                light.position.set(
+
+                    p.Position[0],
+                    p.Position[1],
+                    p.Position[2]
+
+                );
+
+            }
+
+
+
+            scene.add(light);
+
+
+        }
+
+
+
+
+
+
+
+        if(entity.type=="Sun"){
+
+
+
+            let sun =
+            new THREE.DirectionalLight(
+
+                p.Color || "white",
+
+                p.Intensity || 1
+
+            );
+
+
+
+            let targetObject =
+            new THREE.Object3D();
+
+
+
+            targetObject.position.set(
+
+                0,
+                0,
+                0
+
+            );
+
+
+
+            sun.target =
+            targetObject;
+
+
+
+
+
+            if(p.Direction){
+
+
+                let d=p.Direction;
+
+
+                sun.position.set(
+
+                    -d[0] * 10,
+                    -d[1] * 10,
+                    -d[2] * 10
+
+                );
+
+            }
+
+
+
+            scene.add(targetObject);
+
+            scene.add(sun);
+
+
+
+        }
+
+
+
+
+
+
+
+        if(entity.type=="Camera"){
+
+
+
+            if(p.Position){
+
+
+                camera.position.set(
+
+                    p.Position[0],
+                    p.Position[1],
+                    p.Position[2]
+
+                );
+
+
+            }
+
+
+
+            if(p.FOV){
+
+
+                camera.fov=p.FOV;
+
+                camera.updateProjectionMatrix();
+
+
+            }
+
+
+        }
+
+
+
+    }
+
+
+
+
+    camera.lookAt(target);
+
+
+
+    renderer.render(
+
+        scene,
+
+        camera
+
+    );
+
+
+}
+
+
+
+
+
+
+
+function update(){
+
+
+
+    let data =
+    translate(
+
+        document
+        .getElementById("code")
+        .value
+
+    );
+
+
+
+    engine(data);
+
+
+}
+
+
+
+
+
+document
+.getElementById("code")
+.addEventListener(
+
+    "input",
+
+    update
+
+);
+
+
+
+
+update();
+
+
+
+</script>
+
+
+</body>
+</html>
